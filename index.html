@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- Chosen Palette: Exploradores Eléctricos (#F8FAFC background, Electric Cyan #0284C7, Amber Gold #F59E0B, Emerald Green #10B981, Deep Slate #0F172A) -->
+    <!-- Application Structure Plan:
+        1. Top Interactive Header: Sound FX toggle and navigation tabs for the 3D Explorer, 2D Particle Lab, Mission Games, and Teacher Curriculum Portal.
+        2. Hero & Context: "Misión: Exploradores de la Energía" - Engaging story-driven intro tailored for 4th Grade primary students in Colombia.
+        3. Module 1: Interactive Three.js circuit, separate GLB model viewer, rotation/zoom, and optional camera background (not WebXR).
+        4. Module 2: Laboratorio 2D de Conductividad y Partículas (Canvas 2D). Interactive electron flow simulator with variable voltage, component selection, conductivity tester with real-time materials (aluminum, copper, graphite, plastic, rubber, wood).
+        5. Module 3: Desafíos y Minijuegos Educativos ("El Inspector de Circuitos", "El Pulso Firme", "Preguntas Frecuentes").
+        6. Module 4: Zona Maestro (pedagogical material to verify against official MEN sources, Ley 115, illustrative Chart.js metrics, filterable matrix).
+        7. Web Audio API Engine: Synthesizes sound effects (clicks, switches, circuit glow, buzzer) natively without external audio dependencies.
+    -->
+    <!-- Visualization & Content Choices:
+        - 3D Circuit Explorer: Three.js WebGL circuit plus selectable, locally stored GLB component viewer; optional camera background is not spatial AR.
+        - 2D Electron Simulator: Custom Canvas 2D with particle physics representing electron drift velocity and conductivity resistance.
+        - Energy & Time Analytics: Chart.js Bar and Doughnut charts constrained in responsive containers.
+        - Sound Synthesizer: Native Web Audio API oscillator nodes for auditory feedback.
+        - ZERO SVG used (only Canvas 2D, Three.js WebGL, Tailwind CSS, Unicode icons).
+        - ZERO Mermaid JS used.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aventura Eléctrica: Exploradores de la Tecnología - 4° Primaria</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #F8FAFC;
+            color: #0F172A;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, .font-heading {
+            font-family: 'Fredoka', cursive, sans-serif;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 550px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 280px;
+            max-height: 380px;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 320px;
+            }
+        }
+
+        .badge-pulse {
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.85; transform: scale(1.03); }
+        }
+
+        .ar-overlay {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(4px);
+        }
+
+        #threeCanvas {
+            touch-action: none;
+        }
+
+        model-viewer {
+            --progress-bar-color: #0284c7;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-amber-300 selection:text-amber-950">
+
+    <!-- Header Navigation Bar -->
+    <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-lg border-b-4 border-amber-500">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20">
+                
+                <!-- Logo & Brand -->
+                <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('3dlab')">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-slate-900 text-2xl font-bold shadow-md transform hover:rotate-6 transition">
+                        ⚡
+                    </div>
+                    <div>
+                        <h1 class="text-lg sm:text-2xl font-bold text-amber-400 tracking-wide leading-none">Aventura Eléctrica 4°</h1>
+                        <p class="text-[11px] text-slate-300 font-medium mt-0.5">Tecnología e Informática • MEN Colombia</p>
+                    </div>
+                </div>
+
+                <!-- Desktop Navigation Tabs -->
+                <nav class="hidden lg:flex items-center space-x-2">
+                    <button onclick="switchTab('3dlab')" id="nav-3dlab" class="nav-btn px-4 py-2.5 rounded-xl text-sm font-bold bg-amber-500 text-slate-950 shadow hover:bg-amber-400 transition flex items-center gap-2" aria-current="page">
+                        <span>👓</span> Explorador 3D
+                    </button>
+                    <button onclick="switchTab('2dlab')" id="nav-2dlab" class="nav-btn px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 text-slate-200 transition flex items-center gap-2">
+                        <span>🔋</span> Pista de Electrones
+                    </button>
+                    <button onclick="switchTab('misiones')" id="nav-misiones" class="nav-btn px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 text-slate-200 transition flex items-center gap-2">
+                        <span>🎮</span> Desafíos & Juegos
+                    </button>
+                    <button onclick="switchTab('maestro')" id="nav-maestro" class="nav-btn px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 text-slate-200 transition flex items-center gap-2">
+                        <span>🍎</span> Zona Docente (MEN)
+                    </button>
+                </nav>
+
+                <!-- Audio Toggle & Role Indicator -->
+                <div class="flex items-center space-x-3">
+                    <button id="sound-btn" onclick="toggleSound()" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl border border-slate-700 text-sm font-bold transition flex items-center gap-1.5" title="Activar/Desactivar Sonido">
+                        <span id="sound-icon">🔊</span>
+                        <span class="hidden sm:inline text-xs">Sonido</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Scrollable Navigation Bar -->
+        <div class="lg:hidden bg-slate-950 px-3 py-2.5 flex space-x-2 overflow-x-auto border-t border-slate-800 text-xs font-bold">
+            <button onclick="switchTab('3dlab')" data-tab="3dlab" class="mobile-nav-btn px-3 py-1.5 bg-amber-500 text-slate-950 rounded-lg whitespace-nowrap flex items-center gap-1" aria-current="page">👓 Lab 3D</button>
+            <button onclick="switchTab('2dlab')" data-tab="2dlab" class="mobile-nav-btn px-3 py-1.5 bg-slate-800 text-slate-200 rounded-lg whitespace-nowrap flex items-center gap-1">🔋 Lab 2D</button>
+            <button onclick="switchTab('misiones')" data-tab="misiones" class="mobile-nav-btn px-3 py-1.5 bg-slate-800 text-slate-200 rounded-lg whitespace-nowrap flex items-center gap-1">🎮 Desafíos</button>
+            <button onclick="switchTab('maestro')" data-tab="maestro" class="mobile-nav-btn px-3 py-1.5 bg-slate-800 text-slate-200 rounded-lg whitespace-nowrap flex items-center gap-1">🍎 Docente MEN</button>
+        </div>
+    </header>
+
+    <!-- Main Dynamic Content Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- Welcome & Context Card -->
+        <section class="bg-gradient-to-r from-sky-900 via-slate-900 to-indigo-950 rounded-3xl p-6 mb-8 text-white shadow-xl relative overflow-hidden border border-sky-700/50">
+            <div class="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="space-y-2 text-center md:text-left">
+                    <span class="inline-block px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-xs font-bold tracking-wider border border-amber-400/30">
+                        🇨🇴 Educación Básica Primaria • Grado 4°
+                    </span>
+                    <h2 class="text-2xl sm:text-4xl font-extrabold text-amber-400">¡Bienvenidos, Exploradores de la Energía!</h2>
+                        <p class="text-sm sm:text-base text-slate-200 max-w-2xl leading-relaxed">
+                        Aprende cómo funcionan las linternas, los juguetes y los aparatos de tu casa. Explora circuitos y modelos 3D, prueba una simulación con cámara y pon a prueba tus conocimientos sin necesitar matemáticas complejas.
+                    </p>
+                    <p class="text-xs sm:text-sm text-amber-200 font-semibold">⚠️ Usa solo pilas de baja tensión con acompañamiento adulto. Nunca conectes estos experimentos a un tomacorriente.</p>
+                </div>
+                <div class="flex flex-wrap gap-3 justify-center">
+                    <div class="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center min-w-[110px]">
+                        <span class="text-2xl block">💡</span>
+                        <span class="text-xs font-bold text-amber-300">Artefactos</span>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center min-w-[110px]">
+                        <span class="text-2xl block">🔋</span>
+                        <span class="text-xs font-bold text-amber-300">Circuitos</span>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center min-w-[110px]">
+                        <span class="text-2xl block">🛠️</span>
+                        <span class="text-xs font-bold text-amber-300">Unplugged</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MODULE 1: 3D CIRCUIT EXPLORER AND GLB COMPONENT VIEWER -->
+        <section id="tab-3dlab" class="tab-content space-y-6">
+            <div class="bg-white rounded-3xl p-6 border-2 border-slate-200 shadow-xl">
+                
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+                    <div>
+                            <span class="px-3 py-1 bg-sky-100 text-sky-800 rounded-full text-xs font-bold tracking-wide">EXPLORADOR 3D</span>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">Laboratorio de Circuitos y Modelos 3D</h2>
+                        <p class="text-xs sm:text-sm text-slate-600">Rota el circuito, acciona el interruptor y explora modelos 3D individuales. La cámara solo se usa como fondo; esta página no implementa WebXR.</p>
+                    </div>
+
+                    <!-- 3D Controls Bar -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="toggleARMode()" id="ar-btn" class="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl transition shadow flex items-center gap-2" aria-pressed="false">
+                            <span>📷</span> <span id="ar-btn-text">Usar cámara como fondo</span>
+                        </button>
+                        <button onclick="reset3DCamera()" class="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition border border-slate-300">
+                            🔄 Centrar Vista 3D
+                        </button>
+                    </div>
+                </div>
+                <p id="ar-status" class="mb-4 text-[11px] text-slate-500" aria-live="polite">La cámara es opcional y requiere permiso del navegador y una página HTTPS (o localhost). El modelo no se ancla al espacio físico.</p>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- 3D WebGL Canvas Window -->
+                    <div class="lg:col-span-2 relative bg-slate-950 rounded-2xl overflow-hidden min-h-[380px] sm:min-h-[440px] flex items-center justify-center border-4 border-slate-900 shadow-inner group">
+                        
+                        <!-- Real Camera Feed Video Element for AR Simulation -->
+                        <video id="ar-video" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-cover z-0"></video>
+                        
+                        <!-- Three.js Canvas -->
+                        <canvas id="threeCanvas" class="relative z-10 w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+
+                        <!-- HUD Overlay Status -->
+                        <div class="absolute top-4 left-4 z-20 bg-slate-900/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-slate-700/80 text-white text-xs space-y-1 shadow-md">
+                            <div class="flex items-center gap-2 font-bold">
+                                <span id="status-led-3d" class="w-3 h-3 rounded-full bg-red-500 inline-block animate-pulse"></span>
+                                <span id="status-text-3d">Circuito ABIERTO (Sin Corriente)</span>
+                            </div>
+                            <p class="text-[10px] text-slate-400">Punta de prueba: <span id="material-3d-label" class="text-amber-400 font-bold">Cable Cobre</span></p>
+                        </div>
+
+                        <!-- Touch Navigation Hint -->
+                        <div class="absolute bottom-4 right-4 z-20 bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-medium pointer-events-none">
+                            👆 Arrastra para rotar · rueda para acercar o alejar
+                        </div>
+                    </div>
+
+                    <!-- 3D Simulator Interactive Controls Panel -->
+                    <div class="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200 flex flex-col justify-between space-y-5">
+                        
+                        <div class="space-y-4">
+                            <h3 class="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-200 pb-2">
+                                <span>🎛️</span> Panel del Experimentador
+                            </h3>
+
+                            <!-- Switch Controller -->
+                            <div class="space-y-1">
+                                <label class="block text-xs font-bold text-slate-700">1. Interruptor del Circuito</label>
+                                <button id="btn-toggle-switch-3d" onclick="toggle3DSwitch()" class="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-2">
+                                    <span>🚫</span> <span id="switch-3d-text">Interruptor ABIERTO (Apagado)</span>
+                                </button>
+                            </div>
+
+                            <!-- Receptor Component Chooser -->
+                            <div class="space-y-1">
+                                <label class="block text-xs font-bold text-slate-700">2. Receptor de Energía</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button onclick="set3DReceptor('bulb')" id="rec-bulb" class="p-2.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl border-2 border-amber-600 flex items-center justify-center gap-1 shadow-sm">
+                                        💡 Bombillo Incandescente
+                                    </button>
+                                    <button onclick="set3DReceptor('led')" id="rec-led" class="p-2.5 bg-white text-slate-700 font-bold text-xs rounded-xl border border-slate-300 hover:bg-slate-100 flex items-center justify-center gap-1">
+                                        🟢 Diodo LED
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Material Conductor Chooser -->
+                            <div class="space-y-1">
+                                <label class="block text-xs font-bold text-slate-700">3. Material Probador en Brecha</label>
+                                <select id="select-material-3d" onchange="change3DMaterial()" class="w-full p-2.5 bg-white border-2 border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:border-amber-500 focus:outline-none">
+                                    <option value="copper">Cable de Cobre (Conductor Alto ⚡)</option>
+                                    <option value="aluminum">Lámina de Aluminio (Conductor Alto ⚡)</option>
+                                    <option value="graphite">Mina de Lápiz Grafito (Conductor Medio ✏️)</option>
+                                    <option value="plastic">Regla de Plástico (Aislante 🚫)</option>
+                                    <option value="rubber">Borrador de Goma (Aislante 🚫)</option>
+                                    <option value="wood">Palito de Madera (Aislante 🚫)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Explanatory Learning Box -->
+                        <div id="learning-box-3d" class="p-4 bg-sky-50 border-2 border-sky-200 rounded-2xl text-xs text-sky-950 leading-relaxed">
+                            <strong class="font-bold text-sky-900 block mb-1">💡 ¿Qué está pasando en 3D?</strong>
+                            <span id="learning-text-3d">El interruptor está abierto. Como la pista de carreras está interrumpida, los electrones no pueden avanzar y el bombillo permanece apagado.</span>
+                        </div>
+
+                        <div class="p-3 bg-white border-2 border-slate-200 rounded-2xl space-y-2">
+                            <label for="component-model-select" class="block text-xs font-bold text-slate-700">Explora cada componente en 3D</label>
+                            <select id="component-model-select" onchange="changeComponentModel()" class="w-full p-2.5 bg-white border-2 border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 focus:outline-none">
+                                <option value="battery-aa">Pila AA</option>
+                                <option value="switch">Interruptor</option>
+                                <option value="incandescent-bulb">Bombillo incandescente</option>
+                                <option value="led">Diodo LED</option>
+                                <option value="copper-wire">Cable de cobre</option>
+                                <option value="aluminum-strip">Lámina de aluminio</option>
+                                <option value="graphite-pencil">Mina de grafito</option>
+                                <option value="plastic-ruler">Regla de plástico</option>
+                                <option value="rubber-eraser">Borrador de nata</option>
+                                <option value="wooden-stick">Palito de madera</option>
+                            </select>
+                            <model-viewer id="component-model-viewer" src="assets/models/battery-aa.glb" alt="Modelo 3D de una pila AA" camera-controls auto-rotate interaction-prompt="auto" shadow-intensity="0.7" exposure="1" style="display:block;width:100%;height:190px;background:#f8fafc;border-radius:0.75rem;--poster-color:#f8fafc;" aria-label="Visor interactivo del modelo 3D seleccionado">
+                            </model-viewer>
+                            <p id="model-viewer-fallback" class="hidden text-[11px] text-amber-800" role="status">No se pudo iniciar el visor 3D. Actualiza el navegador y revisa la conexión a internet.</p>
+                            <p id="component-model-caption" class="text-[11px] text-slate-600" aria-live="polite">Pila AA: fuente de energía del circuito. Arrastra para girar y usa la rueda o pellizca para acercar.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MODULE 2: 2D CONDUCTIVITY & ELECTRON PARTICLE LAB -->
+        <section id="tab-2dlab" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-3xl p-6 border-2 border-slate-200 shadow-xl">
+                
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <span class="px-3 py-1 bg-amber-100 text-amber-900 rounded-full text-xs font-bold tracking-wide">LABORATORIO DE PARTÍCULAS 2D</span>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">La Pista de Carreras de los Electrones</h2>
+                        <p class="text-xs sm:text-sm text-slate-600">Observa las partículas microscópicas de electricidad moviéndose a través del circuito en tiempo real.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- 2D Canvas Area -->
+                    <div class="lg:col-span-2 bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center relative min-h-[340px] border-4 border-slate-800 shadow-inner">
+                        <canvas id="circuitCanvas2D" width="540" height="300" class="w-full max-w-[540px] h-[300px]"></canvas>
+                    </div>
+
+                    <!-- 2D Controls & Material Inspector -->
+                    <div class="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200 flex flex-col justify-between space-y-4">
+                        <div class="space-y-4">
+                            <h3 class="font-bold text-slate-800 text-sm">Controles de la Pista</h3>
+                            
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Estado del Puente (Interruptor)</label>
+                                <button id="btn-toggle-2d" onclick="toggle2DSwitch()" class="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition shadow">
+                                    Cerrar Interruptor 🟢
+                                </button>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Voltaje de la Pila (Empujón)</label>
+                                <input type="range" id="voltage-slider" min="1" max="3" step="1" value="1" oninput="updateVoltage2D()" class="w-full accent-amber-500" aria-label="Voltaje simulado de una a tres pilas">
+                                <div class="flex justify-between text-[11px] font-bold text-slate-600 mt-1">
+                                    <span>1.5V (Pila AA)</span>
+                                    <span>3.0V (2 Pilas)</span>
+                                    <span>4.5V (3 Pilas)</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Seleccionar Objeto de Prueba</label>
+                                <select id="select-material-2d" onchange="updateMaterial2D()" class="w-full p-2.5 bg-white border-2 border-slate-300 rounded-xl text-xs font-bold text-slate-800">
+                                    <option value="aluminum">Lámina de Aluminio (Conductor)</option>
+                                    <option value="copper">Cable de Cobre (Conductor)</option>
+                                    <option value="graphite">Mina de Lápiz Grafito (Conductor Medio)</option>
+                                    <option value="plastic">Regla de Plástico (Aislante)</option>
+                                    <option value="rubber">Borrador de nata (Aislante)</option>
+                                    <option value="wood">Palito de madera (Aislante)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="diagnostic-2d-box" class="p-3 bg-amber-100 border border-amber-300 rounded-xl text-xs text-amber-900 font-medium" aria-live="polite">
+                            <strong>Diagnóstico:</strong> Los metales conducen electricidad; el grafito la conduce con más dificultad que los metales.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MODULE 3: CHALLENGES & EDUCATIONAL MINIGAMES -->
+        <section id="tab-misiones" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-3xl p-6 border-2 border-slate-200 shadow-xl space-y-6">
+                
+                <div>
+                    <span class="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold tracking-wide">GAMIFICACION Y RETOS</span>
+                    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">Misiones del Inspector de Tecnología</h2>
+                    <p class="text-xs sm:text-sm text-slate-600">Demuestra lo que has aprendido resolviendo estos dilemas tecnológicos del colegio y la casa.</p>
+                </div>
+
+                <!-- Mission Cards Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    <!-- Mission 1 -->
+                    <div class="bg-gradient-to-b from-amber-50 to-orange-50 p-5 rounded-2xl border-2 border-amber-200 flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="px-2.5 py-1 bg-amber-200 text-amber-900 rounded-lg text-xs font-bold">Misión #1</span>
+                                <span class="text-2xl">🔦</span>
+                            </div>
+                            <h3 class="font-bold text-slate-800 text-base">La Linterna Descompuesta</h3>
+                                <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                                Juanito presiona el botón de su linterna pero no enciende. Ya revisó la pila y es nueva. ¿Cuál es una posible causa que debería revisar?
+                            </p>
+                        </div>
+                        <div class="space-y-2">
+                            <button onclick="checkQuiz(1, 'A')" class="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-amber-200 text-left transition">A) El resorte o lámina conductora desconectada</button>
+                            <button onclick="checkQuiz(1, 'B')" class="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-amber-200 text-left transition">B) El plástico exterior del cuerpo</button>
+                            <div id="quiz-ans-1" class="hidden p-2 rounded-lg text-[11px] font-bold"></div>
+                        </div>
+                    </div>
+
+                    <!-- Mission 2 -->
+                    <div class="bg-gradient-to-b from-sky-50 to-blue-50 p-5 rounded-2xl border-2 border-sky-200 flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="px-2.5 py-1 bg-sky-200 text-sky-900 rounded-lg text-xs font-bold">Misión #2</span>
+                                <span class="text-2xl">✏️</span>
+                            </div>
+                            <h3 class="font-bold text-slate-800 text-base">El Probador Sorpresa</h3>
+                            <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                                ¿Cuál útil escolar puede conducir electricidad, aunque peor que un cable metálico?
+                            </p>
+                        </div>
+                        <div class="space-y-2">
+                            <button onclick="checkQuiz(2, 'A')" class="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-sky-200 text-left transition">A) Una regla de plástico transparente</button>
+                            <button onclick="checkQuiz(2, 'B')" class="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-sky-200 text-left transition">B) La mina de grafito de un lápiz</button>
+                            <div id="quiz-ans-2" class="hidden p-2 rounded-lg text-[11px] font-bold"></div>
+                        </div>
+                    </div>
+
+                    <!-- Mission 3 -->
+                    <div class="bg-gradient-to-b from-emerald-50 to-teal-50 p-5 rounded-2xl border-2 border-emerald-200 flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="px-2.5 py-1 bg-emerald-200 text-emerald-900 rounded-lg text-xs font-bold">Misión #3</span>
+                                <span class="text-2xl">⚡</span>
+                            </div>
+                            <h3 class="font-bold text-slate-800 text-base">Electrónico vs. Eléctrico</h3>
+                            <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                                ¿Qué ventaja suelen tener los LED frente a los bombillos incandescentes?
+                            </p>
+                        </div>
+                        <div class="space-y-2">
+                            <button onclick="checkQuiz(3, 'A')" class="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-emerald-200 text-left transition">A) En muchos usos, convierten una mayor parte de la energía en luz útil</button>
+                            <button onclick="checkQuiz(3, 'B')" class="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-emerald-200 text-left transition">B) Porque usan cables de plástico por dentro</button>
+                            <div id="quiz-ans-3" class="hidden p-2 rounded-lg text-[11px] font-bold"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- MODULE 4: TEACHER PORTAL (MEN 2022 & LEY 115) -->
+        <section id="tab-maestro" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-3xl p-6 border-2 border-slate-200 shadow-xl space-y-6">
+                
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                    <div>
+                        <span class="px-3 py-1 bg-indigo-100 text-indigo-900 rounded-full text-xs font-bold tracking-wide">PROPUESTA PEDAGÓGICA PARA REVISIÓN</span>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">Zona del Docente: Marco MEN & Ley 115</h2>
+                        <p class="text-xs sm:text-sm text-slate-600">Propuesta de planificación y actividades para revisar frente a los documentos oficiales del MEN y el PEI de cada institución.</p>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    <div class="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200 flex flex-col items-center">
+                        <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3 text-center">Ejemplo didáctico de energía útil y calor</h3>
+                        <p class="text-[10px] text-slate-500 text-center mb-2">Porcentajes ilustrativos; varían según el dispositivo y no son mediciones.</p>
+                        <div class="chart-container">
+                            <canvas id="efficiencyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200 flex flex-col items-center">
+                        <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3 text-center">Distribución de Sesión Unplugged (60 Minutos)</h3>
+                        <div class="chart-container">
+                            <canvas id="timeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Matrix Search & Table -->
+                <div class="space-y-4 border-t border-slate-200 pt-6">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <h3 class="font-bold text-slate-800 text-base">Matriz de Desempeños MEN (4° Primaria)</h3>
+                        <input type="text" id="matrix-search" onkeyup="filterMatrix()" placeholder="Filtrar por componente o actividad..." class="p-2.5 border-2 border-slate-300 rounded-xl text-xs font-medium w-full sm:w-72 focus:border-indigo-500 focus:outline-none">
+                    </div>
+
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-800 text-xs font-bold uppercase border-b border-slate-200">
+                                    <th class="p-3.5">Componente MEN</th>
+                                    <th class="p-3.5">Desempeño Esperado</th>
+                                    <th class="p-3.5">Estrategia Unplugged en Salón Tradicional</th>
+                                </tr>
+                            </thead>
+                            <tbody id="matrix-tbody" class="text-xs text-slate-700 divide-y divide-slate-200">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 text-slate-400 text-xs py-8 border-t-4 border-amber-500 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+            <div>
+                <p class="font-bold text-slate-200">Aventura Eléctrica: Exploradores de la Tecnología (Grado 4°)</p>
+                <p class="text-slate-500 text-[11px] mt-0.5">Material didáctico orientativo. Verifica su correspondencia con los documentos oficiales vigentes del MEN y el PEI institucional.</p>
+            </div>
+            <div class="text-slate-500 text-[11px]">
+                Desarrollado con Three.js, modelos GLB, Canvas 2D & Chart.js
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript Application Core Logic -->
+    <script>
+        // Web Audio API Sound Effects Synthesizer
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+            const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextConstructor) return false;
+            if (!audioCtx) {
+                audioCtx = new AudioContextConstructor();
+            }
+            return true;
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            if (!initAudio()) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'click') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.05);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'switch_on') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(660, now + 0.12);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.12);
+                osc.start(now);
+                osc.stop(now + 0.12);
+            } else if (type === 'switch_off') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(660, now);
+                osc.frequency.exponentialRampToValueAtTime(220, now + 0.1);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+                osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'error') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.linearRampToValueAtTime(120, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            icon.innerText = soundEnabled ? '🔊' : '🔇';
+            document.getElementById('sound-btn').setAttribute('aria-pressed', String(soundEnabled));
+        }
+
+        // Navigation Tabs Logic
+        function switchTab(tabId) {
+            playSound('click');
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            
+            const target = document.getElementById(`tab-${tabId}`);
+            if (target) target.classList.remove('hidden');
+            document.querySelectorAll('.nav-btn, .mobile-nav-btn').forEach(button => {
+                const active = button.id === `nav-${tabId}` || button.dataset.tab === tabId;
+                button.classList.toggle('bg-amber-500', active);
+                button.classList.toggle('text-slate-950', active);
+                button.classList.toggle('shadow', active && button.classList.contains('nav-btn'));
+                button.classList.toggle('bg-slate-800', !active);
+                button.classList.toggle('text-slate-200', !active);
+                button.setAttribute('aria-current', active ? 'page' : 'false');
+            });
+
+            if (tabId === '3dlab') {
+                setTimeout(onWindowResize3D, 50);
+            } else if (tabId === '2dlab') {
+                draw2DCanvas();
+            } else if (tabId === 'maestro') {
+                renderCharts();
+            }
+        }
+
+        // THREE.JS 3D CIRCUIT SIMULATOR CORE
+        let scene, camera, renderer;
+        let batteryMesh, switchBase, switchArm, bulbMesh, bulbSocketMesh, ledMesh, lightSource;
+        let is3DSwitchClosed = false;
+        let current3DMaterial = 'copper';
+        let current3DReceptor = 'bulb';
+        let isARActive = false;
+
+        const componentModels = {
+            'battery-aa': { label: 'Pila AA', file: 'battery-aa.glb', caption: 'Fuente de energía del circuito. Este modelo es ilustrativo, no una pieza dimensionada para fabricación.' },
+            'switch': { label: 'Interruptor', file: 'switch.glb', caption: 'El interruptor abre o cierra el camino de la corriente.' },
+            'incandescent-bulb': { label: 'Bombillo incandescente', file: 'incandescent-bulb.glb', caption: 'El filamento transforma parte de la energía eléctrica en luz y calor.' },
+            'led': { label: 'Diodo LED', file: 'led.glb', caption: 'Un LED tiene polaridad y normalmente requiere limitar la corriente; eso se simplifica en esta simulación.' },
+            'copper-wire': { label: 'Cable de cobre', file: 'copper-wire.glb', caption: 'El cobre es un buen conductor eléctrico.' },
+            'aluminum-strip': { label: 'Lámina de aluminio', file: 'aluminum-strip.glb', caption: 'El aluminio también conduce electricidad.' },
+            'graphite-pencil': { label: 'Mina de grafito', file: 'graphite-pencil.glb', caption: 'El grafito conduce, pero menos que los metales en esta representación escolar.' },
+            'plastic-ruler': { label: 'Regla de plástico', file: 'plastic-ruler.glb', caption: 'El plástico seco suele actuar como aislante.' },
+            'rubber-eraser': { label: 'Borrador de nata', file: 'rubber-eraser.glb', caption: 'El borrador seco suele actuar como aislante.' },
+            'wooden-stick': { label: 'Palito de madera', file: 'wooden-stick.glb', caption: 'La madera seca suele actuar como aislante; la humedad puede cambiar su comportamiento.' }
+        };
+
+        function changeComponentModel(modelId) {
+            const select = document.getElementById('component-model-select');
+            const viewer = document.getElementById('component-model-viewer');
+            const caption = document.getElementById('component-model-caption');
+            const selectedId = modelId || select.value;
+            const model = componentModels[selectedId];
+            if (!model || !viewer || !caption) return;
+
+            select.value = selectedId;
+            viewer.src = `assets/models/${model.file}`;
+            viewer.alt = `Modelo 3D de ${model.label}`;
+            caption.textContent = `${model.label}: ${model.caption} Arrastra para girar; pellizca o usa la rueda para acercar.`;
+        }
+
+        function init3DScene() {
+            const container = document.getElementById('threeCanvas').parentElement;
+            const canvas = document.getElementById('threeCanvas');
+
+            if (!window.THREE || !THREE.WebGLRenderer) {
+                container.insertAdjacentHTML('beforeend', '<p class="absolute inset-x-4 bottom-16 z-30 rounded-xl bg-amber-100 p-3 text-sm text-amber-950">No se pudo iniciar el visor 3D. Revisa la conexión a internet y que el navegador permita WebGL.</p>');
+                return;
+            }
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 18, 25);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 15);
+            scene.add(dirLight);
+
+            // Circuit Board Floor Base
+            const boardGeo = new THREE.BoxGeometry(22, 0.6, 16);
+            const boardMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 });
+            const board = new THREE.Mesh(boardGeo, boardMat);
+            board.position.y = -0.3;
+            scene.add(board);
+
+            // 1. Battery (Source)
+            const battGeo = new THREE.CylinderGeometry(1.5, 1.5, 5, 32);
+            const battMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.2 });
+            batteryMesh = new THREE.Mesh(battGeo, battMat);
+            batteryMesh.rotation.z = Math.PI / 2;
+            batteryMesh.position.set(0, 0.8, 6);
+            scene.add(batteryMesh);
+
+            // Positive Cap
+            const capGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.6, 16);
+            const capMat = new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.9 });
+            const cap = new THREE.Mesh(capGeo, capMat);
+            cap.rotation.z = Math.PI / 2;
+            cap.position.set(2.7, 0.8, 6);
+            scene.add(cap);
+
+            // 2. Switch (Control)
+            const swBaseGeo = new THREE.BoxGeometry(1.2, 0.4, 4);
+            const swBaseMat = new THREE.MeshStandardMaterial({ color: 0x475569 });
+            switchBase = new THREE.Mesh(swBaseGeo, swBaseMat);
+            switchBase.position.set(-8, 0.5, 0);
+            scene.add(switchBase);
+
+            const armGeo = new THREE.BoxGeometry(0.4, 0.3, 4.5);
+            const armMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9 });
+            switchArm = new THREE.Mesh(armGeo, armMat);
+            switchArm.position.set(-8, 1.2, 0);
+            switchArm.rotation.x = -Math.PI / 6; // Open angle
+            scene.add(switchArm);
+
+            // 3. Receptor - Incandescent Bulb
+            const bulbGeo = new THREE.SphereGeometry(1.8, 32, 32);
+            const bulbMat = new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.7 });
+            bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+            bulbMesh.position.set(8, 2, 0);
+            scene.add(bulbMesh);
+
+            const bulbSocketGeo = new THREE.CylinderGeometry(1.2, 1.2, 1.2, 16);
+            const bulbSocketMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8 });
+            bulbSocketMesh = new THREE.Mesh(bulbSocketGeo, bulbSocketMat);
+            bulbSocketMesh.position.set(8, 0.6, 0);
+            scene.add(bulbSocketMesh);
+
+            // LED with its two leads; the selected receiver is the only one shown.
+            ledMesh = new THREE.Group();
+            const ledLens = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.55, 0.72, 1.05, 16),
+                new THREE.MeshStandardMaterial({ color: 0x16a34a, emissive: 0x052e16, roughness: 0.25, metalness: 0.05 })
+            );
+            ledLens.position.y = 1.45;
+            ledMesh.add(ledLens);
+            const ledDome = new THREE.Mesh(
+                new THREE.SphereGeometry(0.55, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+                new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x052e16, roughness: 0.2, metalness: 0.05 })
+            );
+            ledDome.position.y = 1.98;
+            ledMesh.add(ledDome);
+            const leadMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.85, roughness: 0.2 });
+            [-0.24, 0.24].forEach((x, index) => {
+                const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, index ? 1.5 : 1.15, 8), leadMat);
+                lead.position.set(x, index ? 0.55 : 0.72, 0);
+                ledMesh.add(lead);
+            });
+            ledMesh.position.set(8, 0, 0);
+            ledMesh.visible = false;
+            scene.add(ledMesh);
+
+            // Dynamic Point Light inside receptor
+            lightSource = new THREE.PointLight(0xfacc15, 0, 15);
+            lightSource.position.set(8, 2, 0);
+            scene.add(lightSource);
+
+            // 4. Conductive Wires (3D Tube Paths)
+            create3DWires();
+
+            // Drag to rotate and use the wheel to zoom.
+            let isDragging = false;
+            let prevMouseX = 0, prevMouseY = 0;
+
+            canvas.addEventListener('pointerdown', (e) => {
+                isDragging = true;
+                prevMouseX = e.clientX;
+                prevMouseY = e.clientY;
+                canvas.setPointerCapture(e.pointerId);
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                if (!isDragging) return;
+                const deltaX = e.clientX - prevMouseX;
+                const deltaY = e.clientY - prevMouseY;
+                
+                scene.rotation.y += deltaX * 0.008;
+                scene.rotation.x = Math.max(-0.5, Math.min(0.8, scene.rotation.x + deltaY * 0.008));
+
+                prevMouseX = e.clientX;
+                prevMouseY = e.clientY;
+            });
+
+            const stopDragging = (e) => {
+                isDragging = false;
+                if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+            };
+            canvas.addEventListener('pointerup', stopDragging);
+            canvas.addEventListener('pointercancel', stopDragging);
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const distance = camera.position.length();
+                const nextDistance = Math.max(12, Math.min(48, distance * (e.deltaY > 0 ? 1.08 : 0.92)));
+                camera.position.setLength(nextDistance);
+                camera.lookAt(0, 0, 0);
+            }, { passive: false });
+
+            animate3D();
+        }
+
+        function create3DWires() {
+            const wireMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.8, roughness: 0.3 });
+
+            // Path 1: Battery (+) to Bulb
+            const p1 = new THREE.CylinderGeometry(0.2, 0.2, 10, 16);
+            const w1 = new THREE.Mesh(p1, wireMat);
+            w1.rotation.z = Math.PI / 2;
+            w1.position.set(4, 0.4, 6);
+            scene.add(w1);
+
+            const p2 = new THREE.CylinderGeometry(0.2, 0.2, 6, 16);
+            const w2 = new THREE.Mesh(p2, wireMat);
+            w2.rotation.x = Math.PI / 2;
+            w2.position.set(8, 0.4, 3);
+            scene.add(w2);
+
+            // Path 2: Battery (-) to Switch
+            const p3 = new THREE.CylinderGeometry(0.2, 0.2, 6, 16);
+            const w3 = new THREE.Mesh(p3, wireMat);
+            w3.rotation.z = Math.PI / 2;
+            w3.position.set(-4, 0.4, 6);
+            scene.add(w3);
+
+            const p4 = new THREE.CylinderGeometry(0.2, 0.2, 6, 16);
+            const w4 = new THREE.Mesh(p4, wireMat);
+            w4.rotation.x = Math.PI / 2;
+            w4.position.set(-8, 0.4, 3);
+            scene.add(w4);
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function toggle3DSwitch() {
+            if (!switchArm) return;
+            is3DSwitchClosed = !is3DSwitchClosed;
+            
+            const btnText = document.getElementById('switch-3d-text');
+            const btn = document.getElementById('btn-toggle-switch-3d');
+            const ledStatus = document.getElementById('status-led-3d');
+            const statusText = document.getElementById('status-text-3d');
+
+            if (is3DSwitchClosed) {
+                switchArm.rotation.x = 0; // Close bridge
+                btnText.innerText = "Interruptor CERRADO (Encendido)";
+                btn.className = "w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-2";
+                playSound('switch_on');
+            } else {
+                switchArm.rotation.x = -Math.PI / 6; // Open bridge
+                btnText.innerText = "Interruptor ABIERTO (Apagado)";
+                btn.className = "w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-2";
+                playSound('switch_off');
+            }
+
+            update3DCircuitState();
+        }
+
+        function change3DMaterial() {
+            current3DMaterial = document.getElementById('select-material-3d').value;
+            document.getElementById('material-3d-label').innerText = document.getElementById('select-material-3d').selectedOptions[0].text;
+            const materialModel = {
+                copper: 'copper-wire', aluminum: 'aluminum-strip', graphite: 'graphite-pencil',
+                plastic: 'plastic-ruler', rubber: 'rubber-eraser', wood: 'wooden-stick'
+            }[current3DMaterial];
+            changeComponentModel(materialModel);
+            playSound('click');
+            update3DCircuitState();
+        }
+
+        function set3DReceptor(type) {
+            current3DReceptor = type;
+            const btnBulb = document.getElementById('rec-bulb');
+            const btnLed = document.getElementById('rec-led');
+
+            if (type === 'bulb') {
+                btnBulb.className = "p-2.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl border-2 border-amber-600 flex items-center justify-center gap-1 shadow-sm";
+                btnLed.className = "p-2.5 bg-white text-slate-700 font-bold text-xs rounded-xl border border-slate-300 hover:bg-slate-100 flex items-center justify-center gap-1";
+            } else {
+                btnLed.className = "p-2.5 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl border-2 border-emerald-600 flex items-center justify-center gap-1 shadow-sm";
+                btnBulb.className = "p-2.5 bg-white text-slate-700 font-bold text-xs rounded-xl border border-slate-300 hover:bg-slate-100 flex items-center justify-center gap-1";
+            }
+            changeComponentModel(type === 'bulb' ? 'incandescent-bulb' : 'led');
+            playSound('click');
+            update3DCircuitState();
+        }
+
+        function update3DCircuitState() {
+            if (!bulbMesh || !bulbSocketMesh || !ledMesh || !lightSource) return;
+            const conductivity = { copper: 1, aluminum: 0.9, graphite: 0.38, plastic: 0, rubber: 0, wood: 0 };
+            const materialConductivity = conductivity[current3DMaterial] || 0;
+            const isConductive = materialConductivity > 0;
+            const isConducting = is3DSwitchClosed && isConductive;
+
+            const ledStatus = document.getElementById('status-led-3d');
+            const statusText = document.getElementById('status-text-3d');
+            const learningText = document.getElementById('learning-text-3d');
+
+            bulbMesh.visible = current3DReceptor === 'bulb';
+            bulbSocketMesh.visible = current3DReceptor === 'bulb';
+            ledMesh.visible = current3DReceptor === 'led';
+            if (isConducting) {
+                ledStatus.className = "w-3 h-3 rounded-full bg-emerald-400 inline-block animate-pulse";
+                statusText.innerText = materialConductivity < 0.5
+                    ? "CIRCUITO CERRADO (el grafito conduce con dificultad)"
+                    : "CIRCUITO CERRADO (¡hay conducción! ⚡)";
+                bulbMesh.material.color.setHex(current3DReceptor === 'bulb' ? (materialConductivity < 0.5 ? 0x9a7b28 : 0xfacc15) : 0x64748b);
+                lightSource.intensity = materialConductivity < 0.5 ? 0.65 : 2.5;
+                if (current3DReceptor === 'led') {
+                    ledMesh.children.slice(0, 2).forEach((part) => {
+                        if (part.material.emissive) part.material.emissive.setHex(materialConductivity < 0.5 ? 0x052e16 : 0x14532d);
+                    });
+                }
+                learningText.innerText = materialConductivity < 0.5
+                    ? "El circuito está cerrado. El grafito puede conducir, pero en esta simulación se representa con menos brillo que los metales. El resultado real depende del montaje."
+                    : "¡El circuito está cerrado! El material seleccionado conduce y la energía llega al receptor. Esta es una simulación conceptual, no una medición eléctrica.";
+            } else {
+                ledStatus.className = "w-3 h-3 rounded-full bg-red-500 inline-block";
+                statusText.innerText = !is3DSwitchClosed ? "Circuito ABIERTO (Sin Corriente)" : "BLOQUEADO (Material Aislante)";
+                bulbMesh.material.color.setHex(0x64748b);
+                lightSource.intensity = 0;
+                ledMesh.children.slice(0, 2).forEach((part) => {
+                    if (part.material.emissive) part.material.emissive.setHex(0x052e16);
+                });
+
+                if (!is3DSwitchClosed) {
+                    learningText.innerText = "El interruptor actúa como un puente levadizo levantado. Al estar abierto, la ruta se interrumpe.";
+                } else {
+                    learningText.innerText = "Aunque cerraste el interruptor, hay un material aislante en la brecha. En condiciones normales, el plástico, el caucho seco y la madera seca no permiten el paso fácil de la corriente.";
+                }
+            }
+        }
+
+        function reset3DCamera() {
+            if (!scene || !camera) return;
+            scene.rotation.set(0, 0, 0);
+            camera.position.set(0, 18, 25);
+            camera.lookAt(0, 0, 0);
+            playSound('click');
+        }
+
+        let arRequestToken = 0;
+        async function toggleARMode() {
+            const video = document.getElementById('ar-video');
+            const arButton = document.getElementById('ar-btn');
+            const arBtnText = document.getElementById('ar-btn-text');
+            const arStatus = document.getElementById('ar-status');
+
+            if (isARActive) {
+                isARActive = false;
+                arRequestToken += 1;
+                if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                video.classList.add('hidden');
+                if (scene && window.THREE) scene.background = new THREE.Color(0x0f172a);
+                arBtnText.innerText = "Usar cámara como fondo";
+                arButton.setAttribute('aria-pressed', 'false');
+                arStatus.textContent = "Cámara apagada. Esta función solo coloca el modelo sobre el video; no ofrece seguimiento ni WebXR.";
+                playSound('click');
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                arStatus.textContent = "Este navegador no ofrece acceso a cámara. Prueba Chrome, Edge o Safari actualizado desde HTTPS o localhost.";
+                return;
+            }
+            if (!scene || !renderer) {
+                arStatus.textContent = "El visor 3D no está disponible; la cámara no puede mostrarse detrás del modelo.";
+                return;
+            }
+            if (!window.isSecureContext) {
+                arStatus.textContent = "El navegador solo permite la cámara en una página HTTPS o en localhost.";
+                return;
+            }
+
+            isARActive = true;
+            const requestToken = ++arRequestToken;
+            arBtnText.innerText = "Solicitando permiso…";
+            arButton.disabled = true;
+            arStatus.textContent = "El navegador te pedirá permiso para usar la cámara.";
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } });
+                if (requestToken !== arRequestToken || !isARActive) {
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
+                video.srcObject = stream;
+                video.classList.remove('hidden');
+                if (scene) scene.background = null;
+                arBtnText.innerText = "Apagar cámara";
+                arButton.setAttribute('aria-pressed', 'true');
+                arStatus.textContent = "Cámara activa. El circuito queda fijo en pantalla; no se ancla ni se escala con el espacio real.";
+                playSound('success');
+            } catch (error) {
+                if (requestToken === arRequestToken) {
+                    isARActive = false;
+                    arBtnText.innerText = "Usar cámara como fondo";
+                    arButton.setAttribute('aria-pressed', 'false');
+                    arStatus.textContent = error && error.name === 'NotAllowedError'
+                        ? "No se concedió permiso para la cámara. Puedes continuar usando el explorador 3D sin cámara."
+                        : "No se pudo iniciar la cámara. Revisa los permisos del navegador y vuelve a intentarlo.";
+                }
+            } finally {
+                arButton.disabled = false;
+            }
+        }
+
+        function onWindowResize3D() {
+            if (!camera || !renderer) return;
+            const container = document.getElementById('threeCanvas').parentElement;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // 2D CANVAS ELECTRON LAB CORE
+        let state2D = { switchClosed: false, material: 'aluminum', voltage: 1 };
+        const simulationStart = performance.now();
+
+        function draw2DCanvas() {
+            const canvas = document.getElementById('circuitCanvas2D');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const conductivity = { aluminum: 0.85, copper: 1, graphite: 0.4, plastic: 0, rubber: 0, wood: 0 };
+            const materialConductivity = conductivity[state2D.material] || 0;
+            const isConductive = materialConductivity > 0;
+            const isActive = state2D.switchClosed && isConductive;
+
+            // Wire Path
+            ctx.strokeStyle = isActive ? '#F59E0B' : '#475569';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(70, 50, 400, 200);
+
+            // Battery Draw
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(220, 236, 100, 28);
+            ctx.fillStyle = '#EF4444';
+            ctx.fillRect(310, 240, 10, 20);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(`${state2D.voltage} × AA (${(state2D.voltage * 1.5).toFixed(1)} V)`, 224, 254);
+
+            // Switch Draw
+            ctx.fillStyle = '#0F172A';
+            ctx.fillRect(220, 42, 16, 16);
+            ctx.fillRect(300, 42, 16, 16);
+
+            ctx.strokeStyle = '#E2E8F0';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(228, 50);
+            if (state2D.switchClosed) {
+                ctx.lineTo(308, 50);
+            } else {
+                ctx.lineTo(290, 25);
+            }
+            ctx.stroke();
+
+            // Lightbulb
+            ctx.beginPath();
+            ctx.arc(470, 150, 24, 0, Math.PI * 2);
+            ctx.fillStyle = isActive ? '#FACC15' : '#334155';
+            ctx.fill();
+            ctx.strokeStyle = '#CBD5E1';
+            ctx.stroke();
+
+            // Electrons Flow
+            if (isActive) {
+                ctx.fillStyle = '#38BDF8';
+                const pathLength = 1200;
+                const speed = state2D.voltage * materialConductivity;
+                const time = ((performance.now() - simulationStart) * speed / 150) % pathLength;
+                for (let i = 0; i < 12; i++) {
+                    let offset = (time + i * (pathLength / 12)) % pathLength;
+                    if (offset >= 750 && offset <= 850) continue; // Leave space for the battery.
+                    let x, y;
+                    if (offset < 400) {
+                        x = 70 + offset; y = 50;
+                    } else if (offset < 600) {
+                        x = 470; y = 50 + (offset - 400);
+                    } else if (offset < 1000) {
+                        x = 470 - (offset - 600); y = 250;
+                    } else {
+                        x = 70; y = 250 - (offset - 1000);
+                    }
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            update2DDiagnostic(isActive, materialConductivity);
+        }
+
+        function update2DDiagnostic(isActive, materialConductivity) {
+            const box = document.getElementById('diagnostic-2d-box');
+            if (!box) return;
+            let message;
+            if (!state2D.switchClosed) {
+                message = "El interruptor está abierto: el camino se interrumpe y no hay corriente en este modelo.";
+            } else if (!materialConductivity) {
+                message = "El objeto seleccionado actúa como aislante en este ejemplo. La madera seca, el plástico y el caucho suelen dificultar el paso de la corriente.";
+            } else if (state2D.material === 'graphite') {
+                message = "El grafito conduce, pero suele ofrecer más resistencia que un metal. El brillo y la velocidad son solo una comparación cualitativa.";
+            } else {
+                message = "El material metálico conduce en este modelo. Cambia el objeto y observa cómo afecta el circuito; no es una medición real.";
+            }
+            if (isActive && state2D.voltage > 1) {
+                message += ` Voltaje simulado: ${(state2D.voltage * 1.5).toFixed(1)} V.`;
+            }
+            if (box.dataset.message === message) return;
+            box.dataset.message = message;
+            box.innerHTML = `<strong>Diagnóstico:</strong> ${message}`;
+        }
+
+        function toggle2DSwitch() {
+            state2D.switchClosed = !state2D.switchClosed;
+            document.getElementById('btn-toggle-2d').innerText = state2D.switchClosed ? "Abrir Interruptor 🔴" : "Cerrar Interruptor 🟢";
+            playSound(state2D.switchClosed ? 'switch_on' : 'switch_off');
+            draw2DCanvas();
+        }
+
+        function updateVoltage2D() {
+            state2D.voltage = parseInt(document.getElementById('voltage-slider').value);
+            draw2DCanvas();
+        }
+
+        function updateMaterial2D() {
+            state2D.material = document.getElementById('select-material-2d').value;
+            playSound('click');
+            draw2DCanvas();
+        }
+
+        // Gamified Quiz Inspector
+        function checkQuiz(mision, option) {
+            const ansBox = document.getElementById(`quiz-ans-${mision}`);
+            ansBox.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-emerald-100', 'text-emerald-800');
+
+            if ((mision === 1 && option === 'A') || (mision === 2 && option === 'B') || (mision === 3 && option === 'A')) {
+                ansBox.classList.add('bg-emerald-100', 'text-emerald-800');
+                ansBox.innerText = "¡Correcto! Excelente deducción de inspector de tecnología.";
+                playSound('success');
+            } else {
+                ansBox.classList.add('bg-red-100', 'text-red-800');
+                ansBox.innerText = "Inténtalo de nuevo. Analiza el camino de la energía.";
+                playSound('error');
+            }
+        }
+
+        // Matrix Data & Search Engine
+        const matrixData = [
+            { comp: "Naturaleza y evolución", des: "Reconoce los componentes de artefactos cotidianos y compara su evolución histórica.", act: "Análisis comparativo de la linterna tradicional vs. linterna LED de cartón." },
+            { comp: "Uso y apropiación", des: "Clasifica materiales según su conductividad y ensambla circuitos simples.", act: "Laboratorio 'Probador de Conductores' probando útiles escolares en brecha." },
+            { comp: "Solución de problemas", des: "Diseña y construye modelos de artefactos sencillos con materiales del entorno.", act: "Diseño y armado del Juego del Pulso Firme con alambre dulce y clip." },
+            { comp: "Tecnología y sociedad", des: "Identifica riesgos de la electricidad y promueve el reciclaje de baterías.", act: "Campaña sobre el contenedor de pilas usadas y prevención de descargas." }
+        ];
+
+        function renderMatrix(filter = '') {
+            const tbody = document.getElementById('matrix-tbody');
+            tbody.innerHTML = '';
+            const normalizeText = (value) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const normalizedFilter = normalizeText(filter.trim());
+
+            const filtered = matrixData.filter(m => 
+                normalizeText(m.comp).includes(normalizedFilter) ||
+                normalizeText(m.des).includes(normalizedFilter) ||
+                normalizeText(m.act).includes(normalizedFilter)
+            );
+
+            if (!filtered.length) {
+                const row = document.createElement('tr');
+                row.innerHTML = '<td class="p-4 text-center text-slate-500" colspan="3">No hay coincidencias para esta búsqueda.</td>';
+                tbody.appendChild(row);
+                return;
+            }
+
+            filtered.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="p-3.5 font-bold text-slate-800">${m.comp}</td>
+                    <td class="p-3.5">${m.des}</td>
+                    <td class="p-3.5 bg-amber-50/50 text-slate-800 font-medium">${m.act}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterMatrix() {
+            const query = document.getElementById('matrix-search').value;
+            renderMatrix(query);
+        }
+
+        // Chart.js Metrics
+        let effChart = null, timeChart = null;
+
+        function renderCharts() {
+            if (!window.Chart) return;
+            if (effChart) effChart.destroy();
+            if (timeChart) timeChart.destroy();
+
+            const ctx1 = document.getElementById('efficiencyChart').getContext('2d');
+            effChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['Bombillo incandescente', 'LED'],
+                    datasets: [
+                        { label: 'Energía útil (ejemplo %)', data: [15, 85], backgroundColor: '#10B981' },
+                        { label: 'Energía disipada como calor (ejemplo %)', data: [85, 15], backgroundColor: '#EF4444' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+
+            const ctx2 = document.getElementById('timeChart').getContext('2d');
+            timeChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Indagación (15m)', 'Prototipado Maker (25m)', 'Diagnóstico (10m)', 'Reflexión (10m)'],
+                    datasets: [{
+                        data: [15, 25, 10, 10],
+                        backgroundColor: ['#F59E0B', '#0284C7', '#10B981', '#6366F1']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // Global Initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            init3DScene();
+            renderMatrix();
+            if (!window.customElements || !customElements.get('model-viewer')) {
+                document.getElementById('model-viewer-fallback').classList.remove('hidden');
+            }
+
+            window.addEventListener('resize', () => {
+                onWindowResize3D();
+            });
+
+            setInterval(() => {
+                const activeTab = document.querySelector('.tab-content:not(.hidden)');
+                if (activeTab && activeTab.id === 'tab-2dlab') {
+                    draw2DCanvas();
+                }
+            }, 40);
+        });
+    </script>
+</body>
+</html>
